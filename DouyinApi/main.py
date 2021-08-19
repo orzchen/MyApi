@@ -25,6 +25,16 @@ class Download(object):
         super(Download, self).__init__()
         self.path = path
         self.FileInfo = info
+        # 对文件和路径名进行校验
+        waring = ['\\', '/', ":", '*', '?', "\"", '<', '>', '|']
+        self.Dict = {}
+        for fname in self.FileInfo:
+            fkey = fname
+            for i in waring:
+                fname = fname.replace(i, '')
+                self.path = self.path.replace(i, '')
+            self.Dict.update({fname: self.FileInfo[fkey]})
+        self.FileInfo = self.Dict
 
     def mkdir(self, path):
         folder = os.path.exists(path)
@@ -132,7 +142,7 @@ class user_pageApi(object):
         self.getData(userApi, userSecID, count, max_cursor, signature, nickname)
 
     # pass
-
+    # 第一页/第一次访问
     def getData(self, userApi, userSecID, count, max_cursor, signature, nickname):
         # 尝试次数
         index = 0
@@ -190,6 +200,7 @@ class user_pageApi(object):
                 print('------------', max_cursor, '页抓获数据失败------------\r')
                 sys.exit()
 
+    # 每页信息
     def aPageInfo(self, result, userSecID, count, max_cursor, signature, nickname):
 
         for i in result:
@@ -209,6 +220,116 @@ class user_pageApi(object):
             time.sleep(0.3)
 
         self.nexData(userSecID, count, max_cursor, signature, nickname)
+
+
+class collectionApi(object):
+    """docstring for collectionApi"""
+
+    def __init__(self, arg):
+        super(collectionApi, self).__init__()
+        self.arg = arg
+        self.mixEnd = False
+        self.mixNum = 1
+        self.mixUpNum = None
+
+    def mixAPI(self, url):
+        regex = r"(/collection/|/mix/detail/)([\d]*)"
+        matches = re.search(regex, url)
+        match = matches.group(2)
+        count = 10  # 如果抓取的数据有问题的话，可将该值调小
+        cursor = 0  # 第一次访问
+        mix_id = match
+        # 合集列表api和合集信息api
+        mix_list_api = 'https://www.iesdouyin.com/web/api/mix/item/list/?mix_id=%s&count=%s&cursor=%s' % (
+        mix_id, str(count), str(cursor))
+        mix_info_api = 'https://www.iesdouyin.com/web/api/mix/detail/?mix_id=%s' % mix_id
+
+        print('list : ' + mix_list_api)
+        print('info : ' + mix_info_api)
+
+        r1 = requests.get(mix_list_api, headers=headers).content
+        r2 = requests.get(mix_info_api, headers=headers).content
+        html1 = json.loads(r1)
+        html2 = json.loads(r2)
+        # 合集中作品数目
+        self.mixUpNum = html2['mix_info']['statis']['updated_to_episode']
+        mix_name = html2['mix_info']['mix_name'] + '--' + html2['mix_info']['author']['nickname']
+        self.getMixData(mix_list_api, mix_id, count, cursor, mix_name)
+
+    # 第一页/第一次访问
+    def getMixData(self, mix_list_api, mix_id, count, cursor, mix_name):
+        # 尝试次数
+        index = 0
+        # 存储api数据
+        result = []
+        while result == []:
+            index += 1
+            print('------------正在进行第 %d 次尝试------------\r' % index)
+            time.sleep(0.3)
+            response = requests.get(mix_list_api, headers=headers)
+            html = json.loads(response.content.decode())
+            if self.mixEnd == False:
+                # 下一页值
+                print('[ 合集 ]: ' + str(mix_name) + '\r')
+                cursor = html['cursor']
+                result = html['aweme_list']
+                print(len(html['aweme_list']))
+                print('------------抓获数据成功------------\r')
+                # 处理第一页视频信息
+                self.aPageMixInfo(result, mix_id, count, cursor, mix_name)
+            else:
+                cursor = html['cursor']
+                # self.nexMixData(userSecID, count, max_cursor, signature, mix_name)
+                # end = True
+                print('------------此页无数据，为您跳过------------\r')
+        return result, cursor
+
+    # 下一页
+    def nexMixData(self, mix_id, count, cursor, mix_name):
+        mix_list_api = 'https://www.iesdouyin.com/web/api/mix/item/list/?mix_id=%s&count=%s&cursor=%s' % (
+        mix_id, str(count), str(cursor))
+        index = 0
+        result = []
+        while self.mixEnd == False:
+            # 回到首页，则结束
+            if cursor == 0 or self.mixNum > int(self.mixUpNum):
+                self.mixEnd = True
+                return
+            index += 1
+            print('------------正在对', cursor, '页进行第 %d 次尝试------------\r' % index)
+            time.sleep(0.3)
+            response = requests.get(mix_list_api, headers=headers)
+            html = json.loads(response.content.decode())
+            if self.mixEnd == False:
+                # 下一页值
+                cursor = html['cursor']
+                result = html['aweme_list']
+                print(len(html['aweme_list']))
+                print('------------', cursor, '页抓获数据成功------------\r')
+                # 处理下一页视频信息
+                self.aPageMixInfo(result, mix_id, count, cursor, mix_name)
+            else:
+                self.mixEnd == True
+                print('------------', cursor, '页抓获数据失败------------\r')
+                sys.exit()
+
+    # 每页信息
+    def aPageMixInfo(self, result, mix_id, count, cursor, mix_name):
+        for i in result:
+            # aweme_id = i['aweme_id']
+            # print(i['desc'])
+            # 下载地址
+            downUrl = i['video']['play_addr']['url_list'][0]
+            downPath = mix_name
+            fileName = '第%s集-' % self.mixNum + i['desc'] + '.mp4'
+            fileInfo = {fileName: downUrl}
+            print(fileName)
+            d = Download(downPath, fileInfo)
+            d.downloadFile()
+            self.mixNum += 1
+            time.sleep(0.3)
+
+        self.nexMixData(mix_id, count, cursor, mix_name)
 
 
 # Url类
@@ -248,7 +369,7 @@ class Url:
         elif "douyin.com/user" in self.newUrl:
             self.urlType = 3
         # 合集 self.newUrl.find("iesdouyin.com/share/mix/detail")!=-1
-        elif "iesdouyin.com/share/mix/detail" in self.newUrl:
+        elif "iesdouyin.com/share/mix/detail" in self.newUrl or "douyin.com/collection" in self.newUrl:
             self.urlType = 4
         # 短剧 self.newUrl.find("iesdouyin.com/share/playlet/detail")!=-1
         elif "iesdouyin.com/share/playlet/detail" in self.newUrl:
@@ -275,6 +396,9 @@ def getDownloadUrl(url, urlType):
 
     elif urlType == 4:
         print('合集')
+        coll = collectionApi(url)
+        coll.mixAPI(url)
+
     elif urlType == 5:
         print('短剧')
     else:
