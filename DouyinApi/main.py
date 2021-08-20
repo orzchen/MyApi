@@ -365,7 +365,7 @@ class challengeApi(object):
         count = 9
         cursor = 0
         # _signature
-        # result = os.popen('node signature.js')
+        # result = os.popen('node test.js')
         # context = result.read()
         # _signature = str(context)
         _signature = 'Af1mUwAAYOj-ApmsAY3k5wH9Zk'
@@ -396,7 +396,7 @@ class challengeApi(object):
             html = json.loads(response.content.decode())
             if self.chaEnd == False:
                 # 下一页值
-                print('[ 合集 ]: ' + str(cha_name) + '\r')
+                print('[ 话题 ]: ' + str(cha_name) + '\r')
                 # cursor = html['cursor']
                 cursor += 9
                 result = html['aweme_list']
@@ -458,6 +458,110 @@ class challengeApi(object):
             time.sleep(0.3)
 
         self.nexChaData(ch_id, count, cursor, cha_name, _signature)
+
+
+class playletApi(object):
+    """docstring for playletApi"""
+
+    def __init__(self, arg):
+        super(playletApi, self).__init__()
+        self.arg = arg
+        self.playletUpNum = None  # 短剧中作品数
+        self.playletNum = 1  # 下载计数
+        self.playletEnd = False
+
+    def playAPI(self, url):
+        regex = r'(/playlet/detail/)(.*)(\/\?)'
+        matches = re.search(regex, url)
+        match = matches.group(2)
+        # 短剧id
+        playlet_id = match
+        count = 10
+        cursor = 0
+
+        playlet_list_api = 'https://www.iesdouyin.com/web/api/playlet/item/list/?playlet_id=%s&count=%s&cursor=%s' % (
+        playlet_id, count, cursor)
+        playlet_info_api = 'https://www.iesdouyin.com/web/api/playlet/detail/?playlet_id=%s' % (playlet_id)
+        r1 = requests.get(playlet_list_api, headers=headers).content
+        r2 = requests.get(playlet_info_api, headers=headers).content
+        d1 = json.loads(r1)
+        d2 = json.loads(r2)
+
+        playlet_name = d2['playlet_info']['playlet_name']
+        self.playletUpNum = d2['playlet_info']['statis']['updated_to_episode']
+        self.getPlayData(playlet_list_api, playlet_id, count, cursor, playlet_name)
+
+    def getPlayData(self, playlet_list_api, playlet_id, count, cursor, playlet_name):
+        # 尝试次数
+        index = 0
+        # 存储api数据
+        result = []
+        while result == []:
+            index += 1
+            print('------------正在进行第 %d 次尝试------------\r' % index)
+            time.sleep(0.3)
+            response = requests.get(playlet_list_api, headers=headers)
+            html = json.loads(response.content.decode())
+            if self.playletEnd == False:
+                # 下一页值
+                print('[ 短剧 ]: ' + str(playlet_name) + '\r')
+                cursor = html['cursor']
+                result = html['aweme_list']
+                print(len(html['aweme_list']))
+                print('------------抓获数据成功------------\r')
+                # 处理第一页视频信息
+                self.aPagePlayINfo(result, playlet_id, count, cursor, playlet_name)
+            else:
+                cursor = html['cursor']
+                self.nexPlayData(playlet_id, count, cursor, playlet_name)
+                print('------------此页无数据，为您跳过------------\r')
+        return result, cursor
+
+    def nexPlayData(self, playlet_id, count, cursor, playlet_name):
+        playlet_list_api = 'https://www.iesdouyin.com/web/api/playlet/item/list/?playlet_id=%s&count=%s&cursor=%s' % (
+        playlet_id, count, cursor)
+        index = 0
+        result = []
+        while self.playletEnd == False:
+            # 回到首页，则结束
+            if cursor == 0 or self.playletNum > int(self.playletUpNum):
+                self.playletEnd = True
+                return
+            index += 1
+            print('------------正在对', cursor, '页进行第 %d 次尝试------------\r' % index)
+            time.sleep(0.3)
+            response = requests.get(playlet_list_api, headers=headers)
+            html = json.loads(response.content.decode())
+            if self.playletEnd == False:
+                # 下一页值
+                cursor = html['cursor']
+                result = html['aweme_list']
+                print(len(html['aweme_list']))
+                print('------------', cursor, '页抓获数据成功------------\r')
+                # 处理下一页视频信息
+                self.aPagePlayINfo(result, playlet_id, count, cursor, playlet_name)
+            else:
+                self.playletEnd == True
+                print('------------', cursor, '页抓获数据失败------------\r')
+                sys.exit()
+
+    def aPagePlayINfo(self, result, playlet_id, count, cursor, playlet_name):
+        for i in result:
+            fileName = '第%s集-' % self.playletNum + i['desc'] + '.mp4'
+            downUrl = i['video']['play_addr']['url_list'][0]
+            # 这里对路径，也就是短剧名进行校验
+            waring = ['\\', '/', ":", '*', '?', "\"", '<', '>', '|']
+            for i in waring:
+                playlet_name = playlet_name.replace(i, '')
+            downPath = playlet_name
+            fileInfo = {fileName: downUrl}
+            print(fileName)
+            d = Download(downPath, fileInfo)
+            d.downloadFile()
+            time.sleep(0.3)
+            self.playletNum += 1
+
+        self.nexPlayData(playlet_id, count, cursor, playlet_name)
 
 
 # Url类
@@ -532,6 +636,9 @@ def getDownloadUrl(url, urlType):
 
     elif urlType == 5:
         print('短剧')
+        pl = playletApi(url)
+        pl.playAPI(url)
+
     else:
         print('error')
 
