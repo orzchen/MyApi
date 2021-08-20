@@ -32,7 +32,7 @@ https://www.iesdouyin.com/web/api/v2/aweme/iteminfo/?item_ids={视频或者相�
 
 小姐姐测试：https://www.douyin.com/user/MS4wLjABAAAAlKSDDV19aih7W6POOHk9bh4vbkHl00HCST4hgou7beM?previous_page=app_code_link
 
-![userApi](https://raw.githubusercontent.com/orzchen/MyApi/doc/imgs/userApi.gif)
+![userApi](https://raw.githubusercontent.com/orzchen/MyApi/master/doc/imgs/userApi.gif)
 
 用户作品列表api，用户secid可从url，或手机分享的url访问查看。请求中`_signature`可以在代码中打开自动生成，也可以一直用一个。`count`和`max_cursor`关系：`max_cusor`从`0`开始代表第一页，返回的数据中`max_cursor`是下一页的。最后一页的`max_cursor`接着访问得到的是空`aweme_list`。
 
