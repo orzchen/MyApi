@@ -25,14 +25,15 @@ class Download(object):
         super(Download, self).__init__()
         self.path = path
         self.FileInfo = info
-        # 对文件和路径名进行校验
+        # 对文件和路径名进行校验--在用户api中会出错，因为里面拼接了用户文件夹的路径，这里不能用来校验路径，参见210行
         waring = ['\\', '/', ":", '*', '?', "\"", '<', '>', '|']
         self.Dict = {}
         for fname in self.FileInfo:
             fkey = fname
             for i in waring:
                 fname = fname.replace(i, '')
-                self.path = self.path.replace(i, '')
+            # 对路径的校验
+            # self.path = self.path.replace(i, '')
             self.Dict.update({fname: self.FileInfo[fkey]})
         self.FileInfo = self.Dict
 
@@ -105,7 +106,11 @@ class viApi:
         elif aweme_type == 4:
             fileUrl = jsondata['item_list'][0]['video']['play_addr']['url_list'][0]  # 视频地址
             fileUrl = fileUrl.replace('/playwm/', '/play/')  # 去掉水印
-            fileName = jsondata['item_list'][0]['desc'] + '.mp4'
+            # 如果是空文案，用时间戳
+            if jsondata['item_list'][0]['desc'] == '':
+                fileName = time.strftime('%Y%m%d%H%M%S', time.localtime(time.time())) + '.mp4'
+            else:
+                fileName = jsondata['item_list'][0]['desc'] + '.mp4'
             self.FileNames.add(fileName)
             self.FileInfo = {fileName: fileUrl}
             self.FilePath = downPath + ''
@@ -133,7 +138,7 @@ class user_pageApi(object):
         # post/?sec_uid={用户id}&count={count}&max_cursor={max_cursor}&aid=1128&_signature={signature}
         userApi = 'https://www.iesdouyin.com/web/api/v2/aweme/post/?sec_uid=%s&count=%s&max_cursor=%s&aid=1128&_signature=%s' % (
         userSecID, str(count), max_cursor, signature)
-        # print(userApi)
+        print(userApi)
         jsondata = requests.get(userApi, headers=headers).content
         data = json.loads(jsondata)
 
@@ -212,6 +217,10 @@ class user_pageApi(object):
             print(i['desc'] + '---' + str(i['aweme_type']) + '---' + str(i['aweme_id']))
             # print(html['item_list'][0]['share_url']+'\n'+'--------------------')
             awemeShareUrl = html['item_list'][0]['share_url']
+            # 这里对路径，也就是用户名进行校验
+            waring = ['\\', '/', ":", '*', '?', "\"", '<', '>', '|']
+            for i in waring:
+                nickname = nickname.replace(i, '')
             downPath = nickname + '/'
             vi1 = viApi(self.arg)
             vi1.video_imagesAPI(awemeShareUrl, downPath)
@@ -279,7 +288,7 @@ class collectionApi(object):
                 self.aPageMixInfo(result, mix_id, count, cursor, mix_name)
             else:
                 cursor = html['cursor']
-                # self.nexMixData(userSecID, count, max_cursor, signature, mix_name)
+                self.nexMixData(mix_id, count, cursor, mix_name)
                 # end = True
                 print('------------此页无数据，为您跳过------------\r')
         return result, cursor
@@ -320,6 +329,10 @@ class collectionApi(object):
             # print(i['desc'])
             # 下载地址
             downUrl = i['video']['play_addr']['url_list'][0]
+            # 这里对路径，也就是合集名进行校验
+            waring = ['\\', '/', ":", '*', '?', "\"", '<', '>', '|']
+            for i in waring:
+                mix_name = mix_name.replace(i, '')
             downPath = mix_name
             fileName = '第%s集-' % self.mixNum + i['desc'] + '.mp4'
             fileInfo = {fileName: downUrl}
@@ -330,6 +343,121 @@ class collectionApi(object):
             time.sleep(0.3)
 
         self.nexMixData(mix_id, count, cursor, mix_name)
+
+
+class challengeApi(object):
+    """docstring for challengeApi"""
+
+    def __init__(self, arg):
+        super(challengeApi, self).__init__()
+        self.arg = arg
+        # 相关话题视频的下载数量
+        self.downNum = 100  # 最多下载
+        self.chaNum = 0  # 下载计数
+        self.chaEnd = False
+
+    def chAPI(self, url):
+        regex = r"(/challenge/)(.*)(\/\?)"
+        matches = re.search(regex, url)
+        match = matches.group(2)
+        # 话题id
+        ch_id = match
+        count = 9
+        cursor = 0
+        # _signature
+        # result = os.popen('node signature.js')
+        # context = result.read()
+        # _signature = str(context)
+        _signature = 'Af1mUwAAYOj-ApmsAY3k5wH9Zk'
+        # 话题作品列表api和话题信息api
+        ch_aweme_api = 'https://www.iesdouyin.com/web/api/v2/challenge/aweme/?ch_id=%s&count=%s&cursor=%s&aid=1128&screen_Limit=3&download_click_limit=0&_signature=%s' % (
+        ch_id, str(count), str(cursor), _signature)
+        ch_info_api = 'https://www.iesdouyin.com/web/api/v2/challenge/info/?ch_id=%s' % ch_id
+        r1 = requests.get(ch_aweme_api, headers=headers).content
+        r2 = requests.get(ch_info_api, headers=headers).content
+        d1 = json.loads(r1)
+        d2 = json.loads(r2)
+        # 话题名
+        cha_name = '#' + d2['ch_info']['cha_name']
+        print(cha_name)
+        self.getChaData(ch_aweme_api, ch_id, count, cursor, cha_name, _signature)
+
+    # 第一页/第一次访问
+    def getChaData(self, ch_aweme_api, ch_id, count, cursor, cha_name, _signature):
+        # 尝试次数
+        index = 0
+        # 存储api数据
+        result = []
+        while result == []:
+            index += 1
+            print('------------正在进行第 %d 次尝试------------\r' % index)
+            time.sleep(0.3)
+            response = requests.get(ch_aweme_api, headers=headers)
+            html = json.loads(response.content.decode())
+            if self.chaEnd == False:
+                # 下一页值
+                print('[ 合集 ]: ' + str(cha_name) + '\r')
+                # cursor = html['cursor']
+                cursor += 9
+                result = html['aweme_list']
+                print(len(html['aweme_list']))
+                print('------------抓获数据成功------------\r')
+                # 处理第一页视频信息
+                self.aPageChaInfo(result, ch_id, count, cursor, cha_name, _signature)
+            else:
+                cursor = html['cursor']
+                self.nexChaData(ch_id, count, cursor, cha_name, _signature)
+                # end = True
+                print('------------此页无数据，为您跳过------------\r')
+        return result, cursor
+
+    def nexChaData(self, ch_id, count, cursor, cha_name, _signature):
+        ch_aweme_api = 'https://www.iesdouyin.com/web/api/v2/challenge/aweme/?ch_id=%s&count=%s&cursor=%s&aid=1128&screen_Limit=3&download_click_limit=0&_signature=%s' % (
+        ch_id, str(count), str(cursor), _signature)
+        index = 0
+        result = []
+        while self.chaEnd == False:
+            # 回到首页，则结束
+            if cursor == 0 or self.chaNum > self.downNum:
+                self.chaEnd = True
+                return
+            index += 1
+            print('------------正在对', cursor, '页进行第 %d 次尝试------------\r' % index)
+            time.sleep(0.3)
+            response = requests.get(ch_aweme_api, headers=headers)
+            html = json.loads(response.content.decode())
+            if self.chaEnd == False:
+                # 下一页值
+                # cursor = html['cursor']
+                cursor += 9
+                result = html['aweme_list']
+                print(len(html['aweme_list']))
+                print('------------', cursor, '页抓获数据成功------------\r')
+                # 处理下一页视频信息
+                self.aPageChaInfo(result, ch_id, count, cursor, cha_name, _signature)
+            else:
+                self.chaEnd == True
+                print('------------', cursor, '页抓获数据失败------------\r')
+                sys.exit()
+
+    def aPageChaInfo(self, result, ch_id, count, cursor, cha_name, _signature):
+        for i in result:
+            fileName = i['author']['nickname'] + '-' + i['desc'] + '.mp4'
+            downUrl = i['video']['play_addr']['url_list'][0]
+            downUrl = downUrl.replace('/playwm', '/play')
+            # 这里对路径，也就是话题名进行校验
+            waring = ['\\', '/', ":", '*', '?', "\"", '<', '>', '|']
+            for i in waring:
+                cha_name = cha_name.replace(i, '')
+            downPath = cha_name
+            fileInfo = {fileName: downUrl}
+            print(fileName)
+            d = Download(downPath, fileInfo)
+            d.downloadFile()
+            self.chaNum += 1
+            time.sleep(0.3)
+
+        self.nexChaData(ch_id, count, cursor, cha_name, _signature)
 
 
 # Url类
@@ -389,6 +517,9 @@ def getDownloadUrl(url, urlType):
 
     elif urlType == 2:
         print('话题')
+        ch = challengeApi(url)
+        ch.chAPI(url)
+
     elif urlType == 3:
         # print('用户')
         up = user_pageApi(url)
