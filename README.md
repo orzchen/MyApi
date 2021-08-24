@@ -80,3 +80,57 @@ https://www.douyin.com/aweme/v1/web/search/item/?device_platform=webapp&aid=6383
 ```
 
 其他花里胡哨的接口：[douyin_web_signature](https://github.com/coder-fly/douyin_web_signature)
+
+## 小红书Api
+
+感谢：[爬客 | 吃饭吧](https://paker.net.cn/)
+
+### 微信小程序Api
+
+1、用户详情页
+请求方式：Get
+
+```
+https://www.xiaohongshu.com/fe_api/burdock/weixin/v2/user/用户id
+```
+
+2、用户作品
+
+```
+https://www.xiaohongshu.com/fe_api/burdock/weixin/v2/user/用户id/notes?page=1&page_size=15
+```
+
+请求参数：page 	page_size
+
+3、个人收藏
+
+```
+https://www.xiaohongshu.com/fe_api/burdock/weixin/v2/user/60faf2c80000000001008ad2/collectedNotes?num=10&start= 
+```
+
+图片接口：
+
+小红书App抓包得到
+
+```
+http://sns-img-qc.xhscdn.com/图片id
+```
+
+小程序抓包得到（web端也是这样）
+
+```
+https://ci.xiaohongshu.com/图片id
+```
+
+视频接口
+
+```
+url=http://sns-video-hw.xhscdn.com/视频id?v=2
+```
+
+4、作品接口
+
+```
+https://www.xiaohongshu.com/fe_api/burdock/weixin/v2/note/作品id/single_feed
+```
+
