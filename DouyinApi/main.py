@@ -127,10 +127,10 @@ class user_pageApi(object):
     # 下载用户的作品
     def userAPI(self, userUrl):
         # print(userUrl)
-        regex = r"/user/(.*)"
+        regex = r"/user/(.*)\?"
         matches = re.search(regex, userUrl)
         match = matches.group(1)
-        userSecID = match[0:55]
+        userSecID = match
         # print(userSecID)
         count = 35
         max_cursor = 0
