@@ -88,6 +88,9 @@ class viApi:
         if aweme_type == 2:
             images = jsondata['item_list'][0]['images']  # 相册地址
             fname = jsondata['item_list'][0]['desc']
+            # 防止文案最后一位是空，导致无法创建文件夹
+            if fname[-1] == ' ':
+                fname = fname + time.strftime('%Y%m%d%H%M%S', time.localtime(time.time()))
             for num in range(len(images)):
                 fn = fname + str(num + 1) + '.jpg'
                 self.FileNames.add(fn)
